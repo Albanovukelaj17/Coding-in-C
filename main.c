@@ -9,6 +9,20 @@ typedef struct {
   ssize_t input_length;
 } InputBuffer;
 
+typedef enum {
+  META_COMMAND_SUCCESS,
+  META_COMMAND_UNRECOGNIZED_COMMAND
+} MetaCommandResult;
+
+typedef enum { PREPARE_SUCCESS, PREPARE_UNRECOGNIZED_STATEMENT } PrepareResult;
+
+typedef enum { STATEMENT_INSERT, STATEMENT_SELECT } StatementType;
+
+typedef struct {
+  StatementType type;
+} Statement;
+
+
 InputBuffer* new_input_buffer() {
   InputBuffer* input_buffer = malloc(sizeof(InputBuffer));
   input_buffer->buffer = NULL;
@@ -18,22 +32,19 @@ InputBuffer* new_input_buffer() {
   return input_buffer;
 }
 
-typedef enum {
-  META_COMMAND_SUCCESS,
-  META_COMMAND_UNRECOGNIZED_COMMAND
-} MetaCommandResult;
+void close_input_buffer(InputBuffer* input_buffer) {
+    free(input_buffer->buffer);
+    free(input_buffer);
+}
 
-typedef enum { 
-  PREPARE_SUCCESS,
-  PREPARE_UNRECOGNIZED_STATEMENT 
-  } PrepareResult;
 
-  typedef enum { STATEMENT_INSERT, STATEMENT_SELECT } StatementType;
-
-typedef struct {
-  StatementType type;
-} Statement;
-
+MetaCommandResult do_meta_command(InputBuffer* input_buffer) {
+  if (strcmp(input_buffer->buffer, ".exit") == 0) {
+    exit(EXIT_SUCCESS);
+  } else {
+    return META_COMMAND_UNRECOGNIZED_COMMAND;
+  }
+}
 
 PrepareResult prepare_statement(InputBuffer* input_buffer,
                                 Statement* statement) {
@@ -49,17 +60,16 @@ PrepareResult prepare_statement(InputBuffer* input_buffer,
   return PREPARE_UNRECOGNIZED_STATEMENT;
 }
 
-
-
-
-  MetaCommandResult do_meta_command(InputBuffer* input_buffer) {
-  if (strcmp(input_buffer->buffer, ".exit") == 0) {
-    exit(EXIT_SUCCESS);
-  } else {
-    return META_COMMAND_UNRECOGNIZED_COMMAND;
+void execute_statement(Statement* statement) {
+  switch (statement->type) {
+    case (STATEMENT_INSERT):
+      printf("This is where we would do an insert.\n");
+      break;
+    case (STATEMENT_SELECT):
+      printf("This is where we would do a select.\n");
+      break;
   }
 }
-
 
 void print_prompt() { printf("db > "); }
 
@@ -77,20 +87,16 @@ void read_input(InputBuffer* input_buffer) {
   input_buffer->buffer[bytes_read - 1] = 0;
 }
 
-void close_input_buffer(InputBuffer* input_buffer) {
-    free(input_buffer->buffer);
-    free(input_buffer);
-}
+
 
 int main(int argc, char* argv[]) {
-  InputBuffer* input_buffer = new_input_buffer();
-  while (true) {
-    print_prompt();
-    read_input(input_buffer);
+   InputBuffer* input_buffer = new_input_buffer();
+   while (true) {
+     print_prompt();
+     read_input(input_buffer);
+ 
 
-    if (strcmp(input_buffer->buffer, ".exit") == 0) {
-      close_input_buffer(input_buffer);
-       if (input_buffer->buffer[0] == '.') {
+    if (input_buffer->buffer[0] == '.') {
       switch (do_meta_command(input_buffer)) {
         case (META_COMMAND_SUCCESS):
           continue;
@@ -100,6 +106,7 @@ int main(int argc, char* argv[]) {
       }
      }
 
+    Statement statement;
     switch (prepare_statement(input_buffer, &statement)) {
       case (PREPARE_SUCCESS):
         break;
@@ -108,9 +115,7 @@ int main(int argc, char* argv[]) {
                input_buffer->buffer);
         continue;
     }
-
     execute_statement(&statement);
     printf("Executed.\n");
-    }
-  }
-}
+   }
+ }
