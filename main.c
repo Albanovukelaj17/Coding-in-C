@@ -60,8 +60,14 @@ const uint32_t ROWS_PER_PAGE = PAGE_SIZE / ROW_SIZE;
 const uint32_t TABLE_MAX_ROWS = ROWS_PER_PAGE * TABLE_MAX_PAGES;
 
 typedef struct {
-  uint32_t num_rows;
+  int file_descriptor;
+  uint32_t file_length;
   void* pages[TABLE_MAX_PAGES];
+} Pager;
+
+typedef struct {
+  uint32_t num_rows;
+  Pager* pager;
 } Table;
 
 void print_row(Row* row) {
@@ -193,12 +199,14 @@ ExecuteResult execute_statement(Statement* statement, Table *table) {
   }
 }
 
- Table* new_table() {
- Table* table = (Table*)malloc(sizeof(Table));
-  table->num_rows = 0;
-  for (uint32_t i = 0; i < TABLE_MAX_PAGES; i++) {
-     table->pages[i] = NULL;
-  }
+ Table* table_open(const char* filename) {
+  Pager* pager = pager_open(filename);
+  uint32_t num_rows = pager->file_length; 
+  Table* table = (Table*)malloc(sizeof(Table));
+  
+  table->pager = pager;
+  table->num_rows = num_rows;
+  
   return table;
 }
 
