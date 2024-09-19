@@ -17,12 +17,16 @@ typedef enum {
 
 typedef enum { 
   PREPARE_SUCCESS, 
+  PREPARE_SYNTAX_ERROR,
   PREPARE_UNRECOGNIZED_STATEMENT 
   } PrepareResult;
 
 typedef enum { 
   STATEMENT_INSERT,
    STATEMENT_SELECT } StatementType;
+typedef enum {
+   EXECUTE_SUCCESS,
+    EXECUTE_TABLE_FULL } ExecuteResult;
 
 
 #define COLUMN_USERNAME_SIZE 32
@@ -57,6 +61,10 @@ typedef struct {
   uint32_t num_rows;
   void* pages[TABLE_MAX_PAGES];
 } Table;
+
+void print_row(Row* row) {
+  printf("(%d, %s, %s)\n", row->id, row->username, row->email);
+}
 
 void* row_slot(Table* table, uint32_t row_num) {
   uint32_t page_num = row_num / ROWS_PER_PAGE;
