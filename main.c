@@ -28,10 +28,12 @@ typedef enum {
 
 typedef enum { 
   STATEMENT_INSERT,
-   STATEMENT_SELECT } StatementType;
+  STATEMENT_SELECT 
+  } StatementType;
 typedef enum {
    EXECUTE_SUCCESS,
-    EXECUTE_TABLE_FULL } ExecuteResult;
+    EXECUTE_TABLE_FULL
+     } ExecuteResult;
 
 
 #define COLUMN_USERNAME_SIZE 32
@@ -93,8 +95,8 @@ void* get_page(Pager* pager, uint32_t page_num) {
   if (page_num > TABLE_MAX_PAGES) {
      printf("Tried to fetch page number out of bounds. %d > %d\n", page_num,
      	TABLE_MAX_PAGES);
-     exit(EXIT_FAILURE);  
-     }
+     exit(EXIT_FAILURE);
+  }
 
   if (pager->pages[page_num] == NULL) {
      // Cache miss. Allocate memory and load from file.
@@ -114,6 +116,7 @@ void* get_page(Pager* pager, uint32_t page_num) {
      	exit(EXIT_FAILURE);
          }
      }
+
      pager->pages[page_num] = page;
   }
 
@@ -130,8 +133,6 @@ void* get_page(Pager* pager, uint32_t page_num) {
  }
 
 Pager* pager_open(const char* filename) {
-
-
   int fd = open(filename,
      	  O_RDWR | 	// Read/Write mode
      	      O_CREAT,	// Create file if it does not exist
@@ -147,13 +148,13 @@ Pager* pager_open(const char* filename) {
   off_t file_length = lseek(fd, 0, SEEK_END);
 
   Pager* pager = malloc(sizeof(Pager));
-    pager->file_descriptor = fd;
+  pager->file_descriptor = fd;
   pager->file_length = file_length;
 
    for (uint32_t i = 0; i < TABLE_MAX_PAGES; i++) {
+
      pager->pages[i] = NULL;
    }
-
 
   return pager;
  }
@@ -161,7 +162,7 @@ Pager* pager_open(const char* filename) {
 Table* table_open(const char* filename) {
   
   Pager* pager = pager_open(filename);
-  uint32_t num_rows = pager->file_length /ROW_SIZE ; 
+  uint32_t num_rows = pager->file_length/ROW_SIZE; 
   Table* table = (Table*)malloc(sizeof(Table));
   
   table->pager = pager;
@@ -171,15 +172,19 @@ Table* table_open(const char* filename) {
 }
 
 Table* db_open(const char* filename) {
-   Pager* pager = pager_open(filename);
-   uint32_t num_rows = pager->file_length / ROW_SIZE;
+    Pager* pager = pager_open(filename);
+    uint32_t num_rows = pager->file_length / ROW_SIZE;
 
-  Table* table = malloc(sizeof(Table));
-  table->pager = pager;
-  table->num_rows = num_rows;
+    // Debug-Ausgabe, um die Anzahl der geladenen Zeilen zu überprüfen
+    printf("Database opened. File length: %d bytes, rows: %d\n", pager->file_length, num_rows); 
 
-  return table;
- }
+    Table* table = malloc(sizeof(Table));
+    table->pager = pager;
+    table->num_rows = num_rows;
+
+    return table;
+}
+
 
 InputBuffer* new_input_buffer() {
   InputBuffer* input_buffer = malloc(sizeof(InputBuffer));
@@ -210,6 +215,8 @@ void pager_flush(Pager* pager, uint32_t page_num, uint32_t size) {
      exit(EXIT_FAILURE);
   }
 
+   
+
   ssize_t bytes_written = write(
      pager->file_descriptor, pager->pages[page_num], size
      );
@@ -221,45 +228,39 @@ void pager_flush(Pager* pager, uint32_t page_num, uint32_t size) {
 }
 
 void db_close(Table* table) {
-  Pager* pager = table->pager;
-  uint32_t num_full_pages = table->num_rows / ROWS_PER_PAGE;
+    Pager* pager = table->pager;
+    uint32_t num_full_pages = table->num_rows / ROWS_PER_PAGE;
 
-  for (uint32_t i = 0; i < num_full_pages; i++) {
-     if (pager->pages[i] == NULL) {
-         continue;
-     }
-     pager_flush(pager, i, PAGE_SIZE);
-     free(pager->pages[i]);
-         pager->pages[i] = NULL;
-  }
+    printf("Closing DB. Rows in table: %d\n", table->num_rows); // Debug-Ausgabe
 
-  // There may be a partial page to write to the end of the file
-  // This should not be needed after we switch to a B-tree
-  uint32_t num_additional_rows = table->num_rows % ROWS_PER_PAGE;
-  if (num_additional_rows > 0) {
-     uint32_t page_num = num_full_pages;
-     if (pager->pages[page_num] != NULL) {
-         pager_flush(pager, page_num, num_additional_rows * ROW_SIZE);
-         free(pager->pages[page_num]);
-         pager->pages[page_num] = NULL;
-     }
-  }
+    for (uint32_t i = 0; i < num_full_pages; i++) {
+        if (pager->pages[i] == NULL) {
+            continue;
+        }
+        pager_flush(pager, i, PAGE_SIZE);
+        free(pager->pages[i]);
+        pager->pages[i] = NULL;
+    }
 
-  int result = close(pager->file_descriptor);
-  if (result == -1) {
-     printf("Error closing db file.\n");
-     exit(EXIT_FAILURE);
-  }
-  for (uint32_t i = 0; i < TABLE_MAX_PAGES; i++) {
-     void* page = pager->pages[i];
-     if (page) {
-         free(page);
-         pager->pages[i] = NULL;
-     }
-  }
+    // Prüfe, ob eine teilweise gefüllte Seite existiert
+    uint32_t num_additional_rows = table->num_rows % ROWS_PER_PAGE;
+    if (num_additional_rows > 0) {
+        uint32_t page_num = num_full_pages;
+        if (pager->pages[page_num] != NULL) {
+            pager_flush(pager, page_num, num_additional_rows * ROW_SIZE);
+            free(pager->pages[page_num]);
+            pager->pages[page_num] = NULL;
+        }
+    }
 
-  free(pager);
-  free(table);
+    int result = close(pager->file_descriptor);
+    if (result == -1) {
+        printf("Error closing db file.\n");
+        exit(EXIT_FAILURE);
+    }
+
+    free(pager);
+    free(table);
 }
 
 
@@ -282,10 +283,12 @@ PrepareResult prepare_insert(InputBuffer* input_buffer, Statement* statement) {
   char* email = strtok(NULL, " ");
 
   if (id_string == NULL || username == NULL || email == NULL) {
+    printf("Syntax error: missing fields\n");
     return PREPARE_SYNTAX_ERROR;
   }
 
   int id = atoi(id_string);
+  printf("Parsed id: %d, username: %s, email: %s\n", id, username, email); // Debug-Ausgabe
   if (id < 0) {
      return PREPARE_NEGATIVE_ID;
   }
@@ -325,10 +328,12 @@ ExecuteResult execute_insert(Statement* statement, Table* table) {
   }
 
   Row* row_to_insert = &(statement->row_to_insert);
+      printf("Inserting row: (%d, %s, %s)\n", row_to_insert->id, row_to_insert->username, row_to_insert->email); // Debug-Ausgabe
+
 
   serialize_row(row_to_insert, row_slot(table, table->num_rows));
   table->num_rows += 1;
-
+  
   return EXECUTE_SUCCESS;
 }
 
@@ -336,6 +341,8 @@ ExecuteResult execute_select(Statement* statement, Table* table) {
   Row row;
   for (uint32_t i = 0; i < table->num_rows; i++) {
      deserialize_row(row_slot(table, i), &row);
+             printf("Row %d: (%d, %s, %s)\n", i, row.id, row.username, row.email); // Debug-Ausgabe
+
      print_row(&row);
   }
   return EXECUTE_SUCCESS;
@@ -381,6 +388,8 @@ int main(int argc, char* argv[]) {
    while (true) {
      print_prompt();
      read_input(input_buffer);
+             printf("Received input: %s\n", input_buffer->buffer); // Debug-Ausgabe
+
  
 
     if (input_buffer->buffer[0] == '.') {
