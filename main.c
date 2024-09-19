@@ -18,6 +18,7 @@ typedef enum {
 typedef enum { 
   PREPARE_SUCCESS, 
   PREPARE_SYNTAX_ERROR,
+  PREPARE_NEGATIVE_ID,
   PREPARE_STRING_TOO_LONG,
   PREPARE_UNRECOGNIZED_STATEMENT 
   } PrepareResult;
@@ -128,6 +129,9 @@ PrepareResult prepare_insert(InputBuffer* input_buffer, Statement* statement) {
   }
 
   int id = atoi(id_string);
+  if (id < 0) {
+     return PREPARE_NEGATIVE_ID;
+  }
   if (strlen(username) > COLUMN_USERNAME_SIZE) {
     return PREPARE_STRING_TOO_LONG;
   }
@@ -142,17 +146,17 @@ PrepareResult prepare_insert(InputBuffer* input_buffer, Statement* statement) {
   return PREPARE_SUCCESS;
 }
 
- PrepareResult prepare_statement(InputBuffer* input_buffer,
-                                 Statement* statement) {
+PrepareResult prepare_statement(InputBuffer* input_buffer, Statement* statement) {
    if (strncmp(input_buffer->buffer, "insert", 6) == 0) {
-    return prepare_insert(input_buffer, statement);
+      return prepare_insert(input_buffer, statement);
+   }
 
-  if (strcmp(input_buffer->buffer, "select") == 0) {
-    statement->type = STATEMENT_SELECT;
-    return PREPARE_SUCCESS;
-  }
+   if (strcmp(input_buffer->buffer, "select") == 0) {
+      statement->type = STATEMENT_SELECT;
+      return PREPARE_SUCCESS;
+   }
 
-  return PREPARE_UNRECOGNIZED_STATEMENT;
+   return PREPARE_UNRECOGNIZED_STATEMENT;
 }
 
 
@@ -250,6 +254,9 @@ int main(int argc, char* argv[]) {
       case (PREPARE_STRING_TOO_LONG):
        printf("String is too long.\n");
         continue;
+      case (PREPARE_NEGATIVE_ID):
+        	printf("ID must be positive.\n");
+	          continue;
       case (PREPARE_SYNTAX_ERROR):
         printf("Syntax error. Could not parse statement.\n");
         continue;
