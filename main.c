@@ -77,8 +77,8 @@ typedef struct {
 
 void serialize_row(Row* source, void* destination) {
   memcpy(destination + ID_OFFSET, &(source->id), ID_SIZE);
-  memcpy(destination + USERNAME_OFFSET, &(source->username), USERNAME_SIZE);
-  memcpy(destination + EMAIL_OFFSET, &(source->email), EMAIL_SIZE);
+  strncpy(destination + USERNAME_OFFSET, source->username, USERNAME_SIZE);
+    strncpy(destination + EMAIL_OFFSET, source->email, EMAIL_SIZE);
 }
 
 void deserialize_row(void* source, Row* destination) {
@@ -175,9 +175,7 @@ Table* db_open(const char* filename) {
     Pager* pager = pager_open(filename);
     uint32_t num_rows = pager->file_length / ROW_SIZE;
 
-    // Debug-Ausgabe, um die Anzahl der geladenen Zeilen zu überprüfen
-    printf("Database opened. File length: %d bytes, rows: %d\n", pager->file_length, num_rows); 
-
+   
     Table* table = malloc(sizeof(Table));
     table->pager = pager;
     table->num_rows = num_rows;
@@ -231,7 +229,7 @@ void db_close(Table* table) {
     Pager* pager = table->pager;
     uint32_t num_full_pages = table->num_rows / ROWS_PER_PAGE;
 
-    printf("Closing DB. Rows in table: %d\n", table->num_rows); // Debug-Ausgabe
+  
 
     for (uint32_t i = 0; i < num_full_pages; i++) {
         if (pager->pages[i] == NULL) {
@@ -288,7 +286,7 @@ PrepareResult prepare_insert(InputBuffer* input_buffer, Statement* statement) {
   }
 
   int id = atoi(id_string);
-  printf("Parsed id: %d, username: %s, email: %s\n", id, username, email); // Debug-Ausgabe
+  
   if (id < 0) {
      return PREPARE_NEGATIVE_ID;
   }
@@ -328,7 +326,6 @@ ExecuteResult execute_insert(Statement* statement, Table* table) {
   }
 
   Row* row_to_insert = &(statement->row_to_insert);
-      printf("Inserting row: (%d, %s, %s)\n", row_to_insert->id, row_to_insert->username, row_to_insert->email); // Debug-Ausgabe
 
 
   serialize_row(row_to_insert, row_slot(table, table->num_rows));
@@ -341,7 +338,7 @@ ExecuteResult execute_select(Statement* statement, Table* table) {
   Row row;
   for (uint32_t i = 0; i < table->num_rows; i++) {
      deserialize_row(row_slot(table, i), &row);
-             printf("Row %d: (%d, %s, %s)\n", i, row.id, row.username, row.email); // Debug-Ausgabe
+             
 
      print_row(&row);
   }
@@ -388,8 +385,6 @@ int main(int argc, char* argv[]) {
    while (true) {
      print_prompt();
      read_input(input_buffer);
-             printf("Received input: %s\n", input_buffer->buffer); // Debug-Ausgabe
-
  
 
     if (input_buffer->buffer[0] == '.') {
