@@ -30,10 +30,16 @@ typedef enum {
   STATEMENT_INSERT,
   STATEMENT_SELECT 
   } StatementType;
+
 typedef enum {
    EXECUTE_SUCCESS,
     EXECUTE_TABLE_FULL
      } ExecuteResult;
+
+typedef enum { 
+  NODE_INTERNAL,
+   NODE_LEAF 
+   } NodeType;
 
 
 #define COLUMN_USERNAME_SIZE 32
