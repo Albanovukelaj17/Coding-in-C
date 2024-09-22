@@ -152,19 +152,6 @@ Cursor* table_start(Table* table) {
   return cursor;
 }
 
-Cursor* table_end(Table* table) {
-  Cursor* cursor = malloc(sizeof(Cursor));
-  cursor->table = table;
-  cursor->page_num = table->root_page_num;
-
-  void* root_node = get_page(table->pager, table->root_page_num);
-  uint32_t num_cells = *leaf_node_num_cells(root_node);
-  cursor->cell_num = num_cells;
-  cursor->end_of_table = true;
-
-  return cursor;
-}
-
 
 
 void serialize_row(Row* source, void* destination) {
@@ -391,6 +378,17 @@ void leaf_node_insert(Cursor* cursor, uint32_t key, Row* value) {
   *(leaf_node_key(node, cursor->cell_num)) = key;
   serialize_row(value, leaf_node_value(node, cursor->cell_num));
 }
+
+void print_leaf_node(void* node) {
+  uint32_t num_cells = *leaf_node_num_cells(node);
+  printf("leaf (size %d)\n", num_cells);
+  for (uint32_t i = 0; i < num_cells; i++) {
+    uint32_t key = *leaf_node_key(node, i);
+    printf("  - %d : %d\n", i, key);
+  }
+}
+
+
 void print_constants() {
   printf("ROW_SIZE: %d\n", ROW_SIZE);
   printf("COMMON_NODE_HEADER_SIZE: %d\n", COMMON_NODE_HEADER_SIZE);
@@ -467,12 +465,21 @@ PrepareResult prepare_statement(InputBuffer* input_buffer, Statement* statement)
 ExecuteResult execute_insert(Statement* statement, Table* table) {
   
   void* node = get_page(table->pager, table->root_page_num);
-  if ((*leaf_node_num_cells(node) >= LEAF_NODE_MAX_CELLS)) {
-    return EXECUTE_TABLE_FULL;
+ uint32_t num_cells = (*leaf_node_num_cells(node));
+ if (num_cells >= LEAF_NODE_MAX_CELLS) {    
+  return EXECUTE_TABLE_FULL;
   }
 
   Row* row_to_insert = &(statement->row_to_insert);
-   Cursor* cursor = table_end(table);
+   uint32_t key_to_insert = row_to_insert->id;
+  Cursor* cursor = table_find(table, key_to_insert);
+
+  if (cursor->cell_num < num_cells) {
+    uint32_t key_at_index = *leaf_node_key(node, cursor->cell_num);
+    if (key_at_index == key_to_insert) {
+      return EXECUTE_DUPLICATE_KEY;
+    }
+  }
 
 
  leaf_node_insert(cursor, row_to_insert->id, row_to_insert);
