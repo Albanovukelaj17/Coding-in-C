@@ -31,17 +31,61 @@ typedef enum {
   STATEMENT_SELECT 
   } StatementType;
 
-enum ExecuteResult_t {
+typedef enum ExecuteResult_t  {
   EXECUTE_SUCCESS,
   EXECUTE_DUPLICATE_KEY,
   EXECUTE_TABLE_FULL
-};
+} ExecuteResult;
+
+#define COLUMN_USERNAME_SIZE 32
+#define COLUMN_EMAIL_SIZE 255
+typedef struct{
+  uint32_t id;
+  char username[COLUMN_USERNAME_SIZE+1];
+  char email[COLUMN_EMAIL_SIZE+1];
+} Row;
+
+typedef struct {
+  StatementType type;
+  Row row_to_insert;
+} Statement;
+
+
+#define size_of_attribute(Struct, Attribute) sizeof(((Struct*)0)->Attribute)
+const uint32_t ID_SIZE = size_of_attribute(Row, id);
+const uint32_t USERNAME_SIZE = size_of_attribute(Row, username);
+const uint32_t EMAIL_SIZE = size_of_attribute(Row, email);
+const uint32_t ID_OFFSET = 0;
+const uint32_t USERNAME_OFFSET= ID_OFFSET+ ID_SIZE ;
+const uint32_t EMAIL_OFFSET = USERNAME_OFFSET+ USERNAME_SIZE;
+const uint32_t ROW_SIZE = ID_SIZE+USERNAME_SIZE+EMAIL_SIZE;
+
+const uint32_t PAGE_SIZE = 4096;
+#define TABLE_MAX_PAGES 100
+
+typedef struct {
+  int file_descriptor;
+  uint32_t file_length;
+  uint32_t num_pages;
+  void* pages[TABLE_MAX_PAGES];
+} Pager;
+
+typedef struct {
+  uint32_t root_page_num;
+  Pager* pager;
+} Table;
+
+typedef struct {
+  Table* table;
+  uint32_t page_num;
+  uint32_t cell_num;
+  bool end_of_table;  
+} Cursor;
 
 typedef enum { 
   NODE_INTERNAL,
    NODE_LEAF 
    } NodeType;
-
 
 /*
  * Common Node Header Layout
@@ -105,67 +149,6 @@ void initialize_leaf_node(void* node) {
   *leaf_node_num_cells(node) = 0;
 }
 
-#define COLUMN_USERNAME_SIZE 32
-#define COLUMN_EMAIL_SIZE 255
-typedef struct{
-  uint32_t id;
-  char username[COLUMN_USERNAME_SIZE+1];
-  char email[COLUMN_EMAIL_SIZE+1];
-} Row;
-
-typedef struct {
-  StatementType type;
-  Row row_to_insert;
-} Statement;
-
-
-#define size_of_attribute(Struct, Attribute) sizeof(((Struct*)0)->Attribute)
-const uint32_t ID_SIZE = size_of_attribute(Row, id);
-const uint32_t USERNAME_SIZE = size_of_attribute(Row, username);
-const uint32_t EMAIL_SIZE = size_of_attribute(Row, email);
-const uint32_t ID_OFFSET = 0;
-const uint32_t USERNAME_OFFSET= ID_OFFSET+ ID_SIZE ;
-const uint32_t EMAIL_OFFSET = USERNAME_OFFSET+ USERNAME_SIZE;
-const uint32_t ROW_SIZE = ID_SIZE+USERNAME_SIZE+EMAIL_SIZE;
-
-const uint32_t PAGE_SIZE = 4096;
-#define TABLE_MAX_PAGES 100
-
-typedef struct {
-  int file_descriptor;
-  uint32_t file_length;
-  uint32_t num_pages;
-  void* pages[TABLE_MAX_PAGES];
-} Pager;
-
-typedef struct {
-  uint32_t root_page_num;
-  Pager* pager;
-} Table;
-
-typedef struct {
-  Table* table;
-  uint32_t page_num;
-  uint32_t cell_num;
-  bool end_of_table;  
-} Cursor;
-
-
-Cursor* table_start(Table* table) {
-  Cursor* cursor = malloc(sizeof(Cursor));
-  cursor->table = table;
-  cursor->page_num = table->root_page_num;
-  cursor->cell_num = 0;
-
-  void* root_node = get_page(table->pager, table->root_page_num);
-  uint32_t num_cells = *leaf_node_num_cells(root_node);
-  cursor->end_of_table = (num_cells == 0);
-
-  return cursor;
-}
-
-
-
 void serialize_row(Row* source, void* destination) {
   memcpy(destination + ID_OFFSET, &(source->id), ID_SIZE);
   strncpy(destination + USERNAME_OFFSET, source->username, USERNAME_SIZE);
@@ -215,6 +198,19 @@ void* get_page(Pager* pager, uint32_t page_num) {
   }
 
   return pager->pages[page_num];
+}
+
+Cursor* table_start(Table* table) {
+  Cursor* cursor = malloc(sizeof(Cursor));
+  cursor->table = table;
+  cursor->page_num = table->root_page_num;
+  cursor->cell_num = 0;
+
+  void* root_node = get_page(table->pager, table->root_page_num);
+  uint32_t num_cells = *leaf_node_num_cells(root_node);
+  cursor->end_of_table = (num_cells == 0);
+
+  return cursor;
 }
 
 
@@ -269,7 +265,7 @@ Pager* pager_open(const char* filename) {
   return pager;
  }
 
-Table* table_open(const char* filename) {
+/*Table* table_open(const char* filename) {
   
   Pager* pager = pager_open(filename);
   uint32_t num_rows = pager->file_length/ROW_SIZE; 
@@ -279,7 +275,7 @@ Table* table_open(const char* filename) {
   table->num_rows = num_rows;
   
   return table;
-}
+}*/
 
 Table* db_open(const char* filename) {
     Pager* pager = pager_open(filename);
@@ -374,8 +370,8 @@ void leaf_node_insert(Cursor* cursor, uint32_t key, Row* value) {
   uint32_t num_cells = *leaf_node_num_cells(node);
   if (num_cells >= LEAF_NODE_MAX_CELLS) {
     // Node full
-    printf("Need to implement splitting a leaf node.\n");
-    exit(EXIT_FAILURE);
+    leaf_node_split_and_insert(cursor, key, value);
+    return;
   }
 
   if (cursor->cell_num < num_cells) {
@@ -399,24 +395,6 @@ void print_leaf_node(void* node) {
     printf("  - %d : %d\n", i, key);
   }
 }
-
-/*
-Return the position of the given key.
-If the key is not present, return the position
-where it should be inserted
-*/
-Cursor* table_find(Table* table, uint32_t key) {
-  uint32_t root_page_num = table->root_page_num;
-  void* root_node = get_page(table->pager, root_page_num);
-
-  if (get_node_type(root_node) == NODE_LEAF) {
-    return leaf_node_find(table, root_page_num, key);
-  } else {
-    printf("Need to implement searching an internal node\n");
-    exit(EXIT_FAILURE);
-  }
-}
-
 Cursor* leaf_node_find(Table* table, uint32_t page_num, uint32_t key) {
   void* node = get_page(table->pager, page_num);
   uint32_t num_cells = *leaf_node_num_cells(node);
@@ -446,7 +424,22 @@ Cursor* leaf_node_find(Table* table, uint32_t page_num, uint32_t key) {
   return cursor;
 }
 
+/*
+Return the position of the given key.
+If the key is not present, return the position
+where it should be inserted
+*/
+Cursor* table_find(Table* table, uint32_t key) {
+  uint32_t root_page_num = table->root_page_num;
+  void* root_node = get_page(table->pager, root_page_num);
 
+  if (get_node_type(root_node) == NODE_LEAF) {
+    return leaf_node_find(table, root_page_num, key);
+  } else {
+    printf("Need to implement searching an internal node\n");
+    exit(EXIT_FAILURE);
+  }
+}
 
 void print_constants() {
   printf("ROW_SIZE: %d\n", ROW_SIZE);
