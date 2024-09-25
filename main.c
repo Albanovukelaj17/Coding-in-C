@@ -380,17 +380,7 @@ Pager* pager_open(const char* filename) {
   return pager;
  }
 
-/*Table* table_open(const char* filename) {
-  
-  Pager* pager = pager_open(filename);
-  uint32_t num_rows = pager->file_length/ROW_SIZE; 
-  Table* table = (Table*)malloc(sizeof(Table));
-  
-  table->pager = pager;
-  table->num_rows = num_rows;
-  
-  return table;
-}*/
+
 
 Table* db_open(const char* filename) {
     Pager* pager = pager_open(filename);
@@ -479,6 +469,7 @@ void db_close(Table* table) {
     free(pager);
     free(table);
 }
+
 void leaf_node_split_and_insert(Cursor* cursor, uint32_t key, Row* value) {
   /*
   Create a new node and move half the cells over.
@@ -525,6 +516,7 @@ void leaf_node_split_and_insert(Cursor* cursor, uint32_t key, Row* value) {
     printf("Need to implement updating parent after split\n");
     exit(EXIT_FAILURE);
   }
+}
 }
 
 void leaf_node_insert(Cursor* cursor, uint32_t key, Row* value) {
@@ -579,6 +571,7 @@ Cursor* leaf_node_find(Table* table, uint32_t page_num, uint32_t key) {
   cursor->cell_num = min_index;
   return cursor;
 }
+
 
 /*
 Return the position of the given key.
@@ -646,12 +639,13 @@ PrepareResult prepare_insert(InputBuffer* input_buffer, Statement* statement) {
     return PREPARE_STRING_TOO_LONG;
   }
 
-  statement->row_to_insert.id = id;
-  strcpy(statement->row_to_insert.username, username);
-  strcpy(statement->row_to_insert.email, email);
+    statement->row_to_insert.id = id;
+    strncpy(statement->row_to_insert.username, username, COLUMN_USERNAME_SIZE);
+    strncpy(statement->row_to_insert.email, email, COLUMN_EMAIL_SIZE);
 
-  return PREPARE_SUCCESS;
+    return PREPARE_SUCCESS;
 }
+
 
 PrepareResult prepare_statement(InputBuffer* input_buffer, Statement* statement) {
    if (strncmp(input_buffer->buffer, "insert", 6) == 0) {
@@ -665,7 +659,6 @@ PrepareResult prepare_statement(InputBuffer* input_buffer, Statement* statement)
 
    return PREPARE_UNRECOGNIZED_STATEMENT;
 }
-
 
 
 
